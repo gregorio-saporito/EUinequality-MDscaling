@@ -1,0 +1,205 @@
+---
+title: Multidimensional Scaling and Canonical Correlation Analysis
+author: Gregorio Saporito
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Part a: Multidimensional Scaling
+
+### (i) Implementing multidimensional scaling analysis on economic inequality among EU member states.
+
+Multidimensional scaling was performed on economic inequality indexes retrieved from Eurostat which refer to year 2018. In particular these indexes are:
+
+* SDG_05_30: Gender employment gap (percentage of total population)
+* ILC_DI12: Gini coefficient of equivalised disposable income
+* SDG_01_40: People living in households with very low work intensity (percentage of total population aged less than 60)
+* TESSI082: Material Deprivation (percentage)
+* TESSI180: Income quintile share ratio
+* ILC_LI11: Relative at risk of poverty gap by poverty threshold
+
+### (ii) Commenting on the results, methodology and package functions used with the help of figures/tables
+
+```{r, include=FALSE}
+library(tidyverse)
+library(readxl)
+library(MASS)
+library(ape)
+
+inequality <- read_excel("data/main.xlsx")
+
+ineq.matrix <- as.matrix(inequality[2:7])
+row.names(ineq.matrix) <- inequality$country
+
+# just for comparison we'll do PCA on the dataset
+pca <- prcomp(ineq.matrix, scale=T, center=T)
+pca.var <- pca$sdev^2
+pca.var.per <- round(pca.var/sum(pca.var)*100,1)
+
+set.seed(123)
+pca.km <- kmeans(pca$x[,1:2], centers = 4)
+```
+
+Just for comparison PCA was first performed on the dataset. K-means clustering was performed over the PCA output to identify similar groups. The number of clusters chosen is 4.
+
+```{r, echo=FALSE, out.width = "60%", fig.align="center", fig.cap="PCA Graph"}
+plot(pca$x[,1], pca$x[,2],
+  xlab = paste0("PC1 - ", pca.var.per[1], "%"),
+  ylab = paste0("PC2 - ", pca.var.per[2], "%"),
+  xlim = range(pca$x[,1])*1.2,
+  type = "n",
+  main = "PCA Graph"
+)
+text(pca$x[,1], pca$x[,2], labels = row.names(pca$x), cex=0.6, col=pca.km$cluster)
+```
+
+As can be seen from Figure 1, Italy falls in the same category as Romania, Greece, Croatia, and Spain, while the red cluster includes, among others, Scandinavian countries which are generally know for having higher economic equality.
+
+The same analysis was then performed with Multidimensional Scaling and as a distance metric the Euclidean distance. The function used for this purpose is `cmdscale()` which performs classical multidimensional scaling over a data matrix containing a distance structure. Classical MDS uses a fixed distance metric imposing a linear relationship between the samples. With Euclidean distances the output turns out to be the same as PCA.
+
+```{r, include=FALSE}
+# now time for MDS
+distance.matrix <- dist(scale(ineq.matrix, center=T, scale=T), method = "euclidean")
+
+ineq.mds <- cmdscale(distance.matrix, eig=T)
+mds.var.per <- round(ineq.mds$eig/sum(ineq.mds$eig)*100,1)
+
+set.seed(123)
+mds.km <- kmeans(ineq.mds$points, centers = 4)
+```
+
+```{r, echo=FALSE, out.width = "60%", fig.align="center", fig.cap="MDS plot"}
+plot(ineq.mds$points[,1],ineq.mds$points[,2],
+     xlab = paste0("Coordinate 1 - ", mds.var.per[1], "%"),
+     ylab = paste0("Coordinate 2 - ", mds.var.per[2], "%"),
+     xlim = range(ineq.mds$points[,1])*1.2,
+     type = "n",
+     main = "MDS plot using Euclidean distance"
+)
+text(ineq.mds$points[,1], ineq.mds$points[,2], labels = row.names(ineq.mds$points), cex=0.6,
+     col = mds.km$cluster)
+```
+
+As expected, the results from Figure 2 are the same as those from Figure 1 (the results from MDS just happen to have an inverted orientation). For this reason, also the results from the cluster analysis are the same. With 2 dimensions we are able to explain 73.4\% of the variabilty in the data which is a fairly satisfactory result.
+
+```{r, echo=FALSE, out.width = "60%", fig.align="center", fig.cap="Minimum spanning tree"}
+# Minimum spanning tree
+st <- mst(distance.matrix)
+plot(ineq.mds$points[,1], ineq.mds$points[,2],
+     xlab = "Coordinate 1", ylab = "Coordinate 2",
+     xlim = range(ineq.mds$points[,1])*1.2, type = "n",
+     main = "Minimum spanning tree for the inequality dataset")
+for (i in 1:nrow(inequality)) {
+  w1 <- which(st[i, ] == 1)
+  segments(ineq.mds$points[,1][i], ineq.mds$points[,2][i], ineq.mds$points[,1][w1], ineq.mds$points[,2][w1])
+  }
+text(ineq.mds$points[,1], ineq.mds$points[,2], labels = inequality$country, cex = 0.6)
+```
+
+Another useful tool to visualise the relationship between the EU countries in 2 dimensions is the use of a minimum spanning tree (Figure 3) which links all the vertices without cycles with the minimum edge weight. The task is performed over the same reduced 2-dimensional space as in Figure 2. Figure 3 shows that the closest "neighbours" of Italy are Greece, Romania and Spain.
+
+What if the underlying construct of the data is non-linear? In such case classical MDS would be less effective. In contrast, non-metric MDS allows for non-linearities in the data by finding an optimal scaling through an iterative approach. For this purpose the function `isoMDS()` was used. The same K-means procedure is applied over the output of non-metric MDS.
+
+```{r, echo=FALSE, figures-side, fig.show="hold", out.width="50%", fig.cap="Non-metric MDS"}
+# Non-metric MDS
+ineq.nmds <- isoMDS(d=distance.matrix, k=2)
+
+set.seed(123)
+nmds.km <- kmeans(ineq.nmds$points, centers=4)
+
+plot(ineq.nmds$points[,1], ineq.nmds$points[,2],
+     xlab = "Coordinate 1",
+     ylab = "Coordinate 2",
+     xlim = range(ineq.nmds$points[,1])*1.2,
+     type = "n",
+     main = "Non-metric MDS"
+)
+text(ineq.nmds$points[,1], ineq.mds$points[,2], labels = row.names(ineq.nmds$points), 
+     cex=0.6, col=nmds.km$cluster)
+
+ineq.sh <- Shepard(distance.matrix, ineq.nmds$points)
+plot(ineq.sh, pch = ".", xlab = "Dissimilarity",  ylab = "Distance",
+     main = "Shepard diagram")
+lines(ineq.sh$x, ineq.sh$yf, type = "S")
+```
+
+As can be seen from Figure 4 the results are not remarkably different from the previous finding. This time Croatia and Spain happen to be incorporated in the other cluster including Latvia, Bulgaria, and Lithuania. The Shepard diagram helps to assess the goodness of fit. Ideally all points should fall on a monotonic line. The scatter plot shows that EU countries that are close in the input space tend to be close in the output space. Overall, the clusters are fairly robust to the changes in models we have performed (classical and non-metric MDS).
+
+```{r, include=FALSE}
+library(tidyverse)
+library(CCA)
+library(CCP)
+
+# load first dataset
+dietary <- read.csv2("data/dietary.csv")
+names(dietary)[1] <- "country"
+for(i in c(2:ncol(dietary))){
+  dietary[,i] <- as.numeric(dietary[,i])
+}
+
+X <- as.matrix(dietary[,2:10])
+rownames(X) <- dietary$country
+
+# load second dataset
+sectors <- read.csv2("data/sectors.csv")
+names(sectors)[1] <- "country"
+for(i in c(2:ncol(sectors))){
+  sectors[,i] <- as.numeric(sectors[,i])
+}
+
+Y <- as.matrix(sectors[,2:10])
+rownames(Y) <- sectors$country
+
+# canonical correlation
+res.cc <- cc(X,Y)
+```
+
+## Part b: Canonical Correlation Analysis
+
+### (i) Performing canonical correlation analysis among different types of proteint consumption (1st group) and percentage of the workforce by industry (2nd group) in EU countries
+
+A canonical correlation analysis was performed on the following two groups of variables: sectors and dietary. This type of analysis allows to understand the relationships between two sets of variables.
+
+The canonical correlations obtained are:
+
+```{r, echo=FALSE}
+# canonical correlations
+res.cc$cor
+```
+
+```{r, echo=FALSE, out.width = "60%", fig.align="center", fig.cap="Canonical correlations"}
+barplot(res.cc$cor, xlab = "Component", ylab = "Canonical correlation values", names.arg = 1:9)
+```
+
+### (ii) Commenting on the results, the methodology and package functions used with the help of figures/tables.
+
+The analysis was performed using the `cc()` function from the `CCA` package which performs the analysis over two data matrices. The results are plotted using graphical outputs for canonical correlation analysis available in the `CCA` package. The plot `plt.cc` shows how the variables of the two sets are related in the unit circle.
+
+```{r, echo=FALSE, out.width = "75%", fig.align="center", fig.cap="Graphical output of CCA"}
+plt.cc(res.cc, var.label = TRUE)
+```
+
+Interestingly, Figure 6 shows that protein consumption from red meat is closer to the percentage distribution of workforce employed in the finance sector. On the other hand, protein consumption from cereals has stronger associations with agriculture. Finally, protein consumption from fruits and vegetables, fish, and starchy foods have stronger associations with social services and services in general.
+
+```{r, include=FALSE}
+# compute canonical loadings
+cc2 <- comput(X, Y, res.cc)
+
+# tests of canonical dimensions
+rho <- res.cc$cor
+## Define number of observations, number of variables in first set, and number of variables in the second set.
+n <- dim(X)[1]
+p <- ncol(X)
+q <- ncol(Y)
+```
+
+We then proceed to test the canonical dimensions by first specifying the number of variables in the second and first set and the number of observations. We then calculate p-values using the F-approximations.
+
+```{r, echo=FALSE}
+p.asym(rho, n, p, q, tstat = "Wilks")
+```
+
+The first test of the canonical dimensions shows that all the 9 dimensions are significant. The other tests are not significant and they test the significance of dimensions 2 to 9, 3 to 9 and so on until the 9th dimension.

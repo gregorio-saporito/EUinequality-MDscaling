@@ -1,0 +1,13 @@
+All the indexed refer to year 2018
+
+SDG_05_30: Gender employment gap (percentage of total population)
+
+ILC_DI12: Gini coefficient of equivalised disposable income
+
+SDG_01_40: People living in households with very low work intensity (percentage of total population aged less than 60)
+
+TESSI082: Material Deprivation (percentage)
+
+TESSI180: Income quintile share ratio
+
+ILC_LI11: Relative at risk of poverty gap by poverty threshold
